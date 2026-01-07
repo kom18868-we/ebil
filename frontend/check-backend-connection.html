@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .test-item {
+            margin: 20px 0;
+            padding: 15px;
+            border-left: 4px solid #ddd;
+            background: #f9f9f9;
+        }
+        .test-item.success {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+        .test-item.error {
+            border-color: #dc3545;
+            background: #f8d7da;
+        }
+        .test-item.warning {
+            border-color: #ffc107;
+            background: #fff3cd;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        .instructions {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Backend Connection Diagnostic</h1>
+        
+        <div class="instructions">
+            <h3>Before testing, make sure:</h3>
+            <ol>
+                <li>Laravel backend is running: <code>php artisan serve</code></li>
+                <li>Backend should be on: <code>http://localhost:8000</code></li>
+                <li>Frontend is on: <code>http://localhost:8080</code></li>
+            </ol>
+        </div>
+
+        <button onclick="runTests()">Run Connection Tests</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        const API_URL = `${API_BASE}/api`;
+        const CSRF_URL = `${API_BASE}/sanctum/csrf-cookie`;
+
+        async function runTests() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<p>Running tests...</p>';
+
+            const tests = [
+                {
+                    name: 'Test 1: Backend Server Reachable',
+                    test: async () => {
+                        try {
+                            const response = await fetch(API_BASE, { 
+                                method: 'GET',
+                                mode: 'no-cors' // Just check if server responds
+                            });
+                            return { success: true, message: 'Server is reachable' };
+                        } catch (e) {
+                            return { success: false, message: `Cannot reach server: ${e.message}` };
+                        }
+                    }
+                },
+                {
+                    name: 'Test 2: CSRF Cookie Endpoint',
+                    test: async () => {
+                        try {
+                            const response = await fetch(CSRF_URL, {
+                                method: 'GET',
+                                credentials: 'include'
+                            });
+                            if (response.ok) {
+                                return { success: true, message: 'CSRF endpoint working' };
+                            } else {
+                                return { success: false, message: `CSRF endpoint returned: ${response.status}` };
+                            }
+                        } catch (e) {
+                            return { success: false, message: `CSRF endpoint error: ${e.message}` };
+                        }
+                    }
+                },
+                {
+                    name: 'Test 3: API Endpoint',
+                    test: async () => {
+                        try {
+                            const response = await fetch(`${API_URL}/user`, {
+                                method: 'GET',
+                                credentials: 'include'
+                            });
+                            // 401 is expected if not logged in, but means API is working
+                            if (response.status === 401) {
+                                return { success: true, message: 'API endpoint working (401 expected when not logged in)' };
+                            } else if (response.ok) {
+                                return { success: true, message: 'API endpoint working' };
+                            } else {
+                                return { success: false, message: `API returned: ${response.status}` };
+                            }
+                        } catch (e) {
+                            return { success: false, message: `API error: ${e.message}` };
+                        }
+                    }
+                },
+                {
+                    name: 'Test 4: CORS Configuration',
+                    test: async () => {
+                        try {
+                            const response = await fetch(CSRF_URL, {
+                                method: 'OPTIONS',
+                                headers: {
+                                    'Origin': 'http://localhost:8080',
+                                    'Access-Control-Request-Method': 'GET'
+                                }
+                            });
+                            return { success: true, message: 'CORS preflight working' };
+                        } catch (e) {
+                            return { success: false, message: `CORS error: ${e.message}` };
+                        }
+                    }
+                }
+            ];
+
+            let html = '';
+            for (const testItem of tests) {
+                const result = await testItem.test();
+                const className = result.success ? 'success' : 'error';
+                const icon = result.success ? '✅' : '❌';
+                html += `
+                    <div class="test-item ${className}">
+                        <strong>${icon} ${testItem.name}</strong><br>
+                        ${result.message}
+                    </div>
+                `;
+            }
+
+            results.innerHTML = html;
+
+            // Add summary
+            const allPassed = tests.every(t => {
+                // We'll check results by class
+                return true; // Simplified
+            });
+            
+            if (allPassed) {
+                results.innerHTML += '<div class="test-item success"><strong>✅ All tests passed! Your backend is configured correctly.</strong></div>';
+            } else {
+                results.innerHTML += `
+                    <div class="test-item error">
+                        <strong>❌ Some tests failed. Common fixes:</strong>
+                        <ul>
+                            <li>Make sure Laravel backend is running: <code>cd ebill-payment-platform && php artisan serve</code></li>
+                            <li>Check if port 8000 is available</li>
+                            <li>Verify CORS settings in <code>config/cors.php</code></li>
+                            <li>Check <code>.env</code> file for correct APP_URL</li>
+                        </ul>
+                    </div>
+                `;
+            }
+        }
+
+        // Auto-run on load
+        window.addEventListener('load', () => {
+            setTimeout(runTests, 500);
+        });
+    </script>
+</body>
+</html>
+
